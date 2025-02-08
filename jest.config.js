@@ -1,11 +1,12 @@
-export default {
+/** @type {import('jest').Config} */
+const config = {
   testEnvironment: "node",
-  transform: {
-    "^.+\\.js$": "babel-jest",
-  },
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   testMatch: ["**/tests/**/*.test.js"],
   verbose: true,
+  transform: {},
 };
+
+export default config;

@@ -50,14 +50,19 @@ export function processByType(sequence) {
         });
         break;
 
-      case "image":
+      case "image": {
         const role = element.role || "content";
+        // Ensure the role array exists
+        if (!collections.images[role]) {
+          collections.images[role] = [];
+        }
         collections.images[role].push({
           ...element,
           context: getElementContext(sequence, index),
         });
         collections.metadata.hasMedia = true;
         break;
+      }
 
       case "list":
         collections.lists.push({
@@ -91,7 +96,7 @@ export function processByType(sequence) {
     }
   });
 
-  // Add convenience methods for common queries
+  // Add helper methods
   addCollectionHelpers(collections);
 
   return collections;
@@ -123,71 +128,27 @@ function getElementContext(sequence, position) {
 }
 
 /**
- * Add helper methods to the collections object
- * @param {object} collections - Type-based collections
+ * Add helper methods to collections
+ * @param {object} collections
  */
 function addCollectionHelpers(collections) {
-  // Get all images regardless of role
-  collections.getAllImages = function () {
-    return [
-      ...this.images.background,
-      ...this.images.content,
-      ...this.images.gallery,
-      ...this.images.icons,
-    ];
-  };
-
-  // Get headings of a specific level
+  // Get headings of specific level
   collections.getHeadingsByLevel = function (level) {
     return this.headings.filter((h) => h.level === level);
   };
 
-  // Get elements that appear before a specific heading level
-  collections.getElementsBeforeHeadingLevel = function (level) {
-    const firstHeading = this.headings.find((h) => h.level === level);
-    if (!firstHeading) return [];
-
-    return Object.values(this)
-      .flat()
-      .filter(
-        (el) =>
-          el.context && el.context.position < firstHeading.context.position
-      );
-  };
-
-  // Find elements by their relationship to headings
+  // Get elements by heading context
   collections.getElementsByHeadingContext = function (headingFilter) {
-    const elements = [];
-    const validTypes = ["paragraphs", "images", "lists", "code"];
+    const allElements = [
+      ...this.paragraphs,
+      ...Object.values(this.images).flat(),
+      ...this.lists,
+      ...this.code,
+    ];
 
-    validTypes.forEach((type) => {
-      if (Array.isArray(this[type])) {
-        elements.push(
-          ...this[type].filter(
-            (el) =>
-              el.context &&
-              el.context.nearestHeading &&
-              headingFilter(el.context.nearestHeading)
-          )
-        );
-      }
-    });
-
-    return elements;
-  };
-
-  // Get all content between two headings
-  collections.getContentBetweenHeadings = function (startHeading, endHeading) {
-    const startPos = startHeading.context.position;
-    const endPos = endHeading ? endHeading.context.position : Infinity;
-
-    return Object.values(this)
-      .flat()
-      .filter(
-        (el) =>
-          el.context &&
-          el.context.position > startPos &&
-          el.context.position < endPos
-      );
+    return allElements.filter(
+      (el) =>
+        el.context?.nearestHeading && headingFilter(el.context.nearestHeading)
+    );
   };
 }

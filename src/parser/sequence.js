@@ -30,25 +30,37 @@ export function processSequence(ast) {
  */
 function processNode(node, position) {
   switch (node.type) {
-    case "heading":
+    case "heading": {
+      const labels = extractLabels(node);
+      // Remove labels from content
+      const content = node.children
+        ? getTextContent(node).replace(/\s*{\.[\w-]+}\s*$/, "")
+        : "";
+
       return {
         type: "heading",
         level: node.depth,
-        content: getTextContent(node),
+        content,
         position,
-        labels: extractLabels(node),
+        labels,
       };
+    }
 
-    case "paragraph":
+    case "paragraph": {
       // Check if this paragraph only contains an image
-      if (isImageParagraph(node)) {
+      const hasOnlyImage =
+        node.children?.length === 1 && node.children[0].type === "image";
+
+      if (hasOnlyImage) {
         return processImageNode(node.children[0], position);
       }
+
       return {
         type: "paragraph",
         content: getTextContent(node),
         position,
       };
+    }
 
     case "image":
       return processImageNode(node, position);
@@ -75,20 +87,9 @@ function processNode(node, position) {
         position,
       };
 
-    // Add more node types as needed
-
     default:
       return null;
   }
-}
-
-/**
- * Check if a paragraph node contains only an image
- * @param {object} node - Paragraph node
- * @returns {boolean}
- */
-function isImageParagraph(node) {
-  return node.children.length === 1 && node.children[0].type === "image";
 }
 
 /**
@@ -98,15 +99,27 @@ function isImageParagraph(node) {
  * @returns {object} Processed image element
  */
 function processImageNode(node, position) {
-  // Check for special image roles using alt text prefixes
+  // Determine image role from alt text or context
   const alt = node.alt || "";
+  let role = "content";
+
+  // Check for role in alt text
   const roleMatch = alt.match(/^(background|icon|gallery):\s*(.*)/);
+  if (roleMatch) {
+    role = roleMatch[1];
+  } else if (position === 0) {
+    // First image in sequence is typically a background
+    role = "background";
+  }
+
+  // Clean up alt text
+  const cleanAlt = roleMatch ? roleMatch[2] : alt;
 
   return {
     type: "image",
-    role: roleMatch ? roleMatch[1] : "content",
+    role,
     src: node.url,
-    alt: roleMatch ? roleMatch[2] : alt,
+    alt: cleanAlt,
     title: node.title || null,
     position,
   };
@@ -126,13 +139,18 @@ function getTextContent(node) {
 }
 
 /**
- * Extract labels from a node's data (e.g., {.label1 .label2})
+ * Extract labels from a node (e.g., {.label1 .label2})
  * @param {object} node - AST node
  * @returns {string[]} Array of labels
  */
 function extractLabels(node) {
-  // This will need to be implemented based on how we decide
-  // to handle labels in the markdown
+  const text = getTextContent(node);
+  const labelMatch = text.match(/{(\.[\w-]+(?:\s+\.[\w-]+)*)}\s*$/);
+
+  if (labelMatch) {
+    return labelMatch[1].split(/\s+/).map((label) => label.substring(1)); // Remove the leading dot
+  }
+
   return [];
 }
 

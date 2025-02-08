@@ -8,5 +8,8 @@
         }
       }
     ]
-  ]
+  ],
+  "assumptions": {
+    "setPublicClassFields": true
+  }
 }
