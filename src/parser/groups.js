@@ -1,29 +1,21 @@
 /**
- * Transform a sequence of elements into semantic content groups
+ * Transform a sequence into content groups
  */
 
-/**
- * Process a sequence into hierarchical content groups
- * @param {Array} sequence - Sequence of content elements
- * @returns {object} Grouped content structure
- */
 export function processGroups(sequence) {
-  // Initialize group structure
   const structure = {
-    main: null, // Main content group if it exists
-    items: [], // Subsequent content groups
+    main: null,
+    items: [],
   };
 
-  // Track current group being built
   let currentGroup = null;
   let mainGroupIdentified = false;
 
-  // Analyze the sequence
+  // First pass: identify the main group and initial item groups
   for (let i = 0; i < sequence.length; i++) {
     const element = sequence[i];
 
     if (element.type === "divider") {
-      // Explicit group division
       if (currentGroup) {
         addGroupToStructure(currentGroup, structure);
       }
@@ -31,173 +23,157 @@ export function processGroups(sequence) {
       continue;
     }
 
-    if (element.type === "heading") {
-      // Handle heading-based group creation
-      if (shouldStartNewGroup(element, currentGroup, sequence, i)) {
-        if (currentGroup) {
-          addGroupToStructure(currentGroup, structure);
-        }
-        currentGroup = createNewGroup(element);
-      } else {
-        // Add heading to current group
-        addHeadingToGroup(currentGroup, element);
+    // Start a new group on headings that should begin groups
+    if (
+      element.type === "heading" &&
+      shouldStartNewGroup(element, currentGroup, sequence, i)
+    ) {
+      if (currentGroup) {
+        addGroupToStructure(currentGroup, structure);
       }
-      continue;
+      currentGroup = createNewGroup();
     }
 
     // Add element to current group
     if (!currentGroup) {
       currentGroup = createNewGroup();
     }
-    currentGroup.content.push(element);
+
+    if (element.type === "heading") {
+      addHeadingToGroup(currentGroup, element);
+    } else {
+      currentGroup.content.push(element);
+    }
   }
 
-  // Add final group if exists
+  // Add final group
   if (currentGroup) {
     addGroupToStructure(currentGroup, structure);
+  }
+
+  // Second pass: determine roles if not already set
+  if (!structure.main && structure.items.length > 0) {
+    // If first group has h1, it's the main group
+    const firstGroup = structure.items[0];
+    if (firstGroup.headings.title && firstGroup.headings.title.level === 1) {
+      structure.main = firstGroup;
+      structure.items = structure.items.slice(1);
+    }
   }
 
   return structure;
 }
 
-/**
- * Create a new content group
- * @param {object} [headingElement] - Initial heading element
- * @returns {object} New group structure
- */
-function createNewGroup(headingElement = null) {
+function createNewGroup() {
   return {
     headings: {
-      title: null, // Main heading (h1 or first significant heading)
-      subtitle: null, // Secondary heading if exists
-      eyebrow: null, // Small heading above title if exists
+      eyebrow: null,
+      title: null,
+      subtitle: null,
     },
-    content: [], // Non-heading content
+    content: [],
     metadata: {
-      level: headingElement ? headingElement.level : null,
-      hasMedia: false,
+      level: null,
       contentTypes: new Set(),
     },
   };
 }
 
-/**
- * Determine if a heading should start a new group
- * @param {object} heading - Heading element
- * @param {object} currentGroup - Current group being built
- * @param {Array} sequence - Full sequence
- * @param {number} position - Current position in sequence
- * @returns {boolean}
- */
 function shouldStartNewGroup(heading, currentGroup, sequence, position) {
   if (!currentGroup) return true;
 
-  // Always start new group if current group is empty
+  // If current group has no content yet, don't start new one
   if (currentGroup.content.length === 0 && !currentGroup.headings.title) {
-    return true;
-  }
-
-  // Check for eyebrow pattern
-  if (isEyebrowPattern(heading, sequence, position)) {
     return false;
   }
 
-  // Check heading levels
-  if (currentGroup.metadata.level) {
-    // Start new group if:
-    // 1. Current group has main heading and content
-    // 2. New heading is same or higher level
-    return (
-      currentGroup.content.length > 0 &&
-      heading.level <= currentGroup.metadata.level
-    );
-  }
-
-  return true;
-}
-
-/**
- * Check if heading is part of an eyebrow pattern
- * @param {object} heading - Heading element
- * @param {Array} sequence - Full sequence
- * @param {number} position - Current position in sequence
- * @returns {boolean}
- */
-function isEyebrowPattern(heading, sequence, position) {
-  // Look ahead for a larger heading
-  const nextHeading = sequence
-    .slice(position + 1)
-    .find((el) => el.type === "heading");
-
-  if (nextHeading && nextHeading.level < heading.level) {
-    // Current heading is smaller than next heading = eyebrow pattern
+  // If we have an H1, it's always a new group (unless it's first)
+  if (heading.level === 1 && currentGroup.headings.title) {
     return true;
   }
 
+  // For H3s, check if it's an eyebrow for the next heading
+  if (heading.level === 3) {
+    const nextHeading = sequence
+      .slice(position + 1)
+      .find((el) => el.type === "heading");
+    if (nextHeading && nextHeading.level < heading.level) {
+      return false;
+    }
+  }
+
+  // For same-level headings (like H2s in a feature list),
+  // start new group if we already have significant content
+  if (
+    currentGroup.headings.title &&
+    heading.level === currentGroup.headings.title.level &&
+    (currentGroup.content.length > 0 || currentGroup.headings.subtitle)
+  ) {
+    return true;
+  }
+
+  return heading.level <= (currentGroup.metadata.level || Infinity);
+}
+
+function isEyebrowHeading(heading, sequence, position) {
+  // Look ahead for a larger heading
+  for (let i = position + 1; i < sequence.length; i++) {
+    const next = sequence[i];
+    if (next.type === "heading") {
+      return next.level < heading.level;
+    }
+    // Only look at immediate siblings
+    if (next.type !== "heading" && next.type !== "image") {
+      break;
+    }
+  }
   return false;
 }
 
-/**
- * Add a heading to a group in the appropriate slot
- * @param {object} group - Content group
- * @param {object} heading - Heading element
- */
 function addHeadingToGroup(group, heading) {
+  // Store the type of heading role we've assigned
+  let role = null;
+
+  // If no title yet, this is either eyebrow or title
   if (!group.headings.title) {
-    group.headings.title = heading;
+    // If it's level 3 and no eyebrow yet, it's likely an eyebrow
+    if (heading.level === 3 && !group.headings.eyebrow) {
+      group.headings.eyebrow = heading;
+      role = "eyebrow";
+    } else {
+      group.headings.title = heading;
+      role = "title";
+    }
     group.metadata.level = heading.level;
-    return;
+    return role;
   }
 
-  if (heading.level < group.headings.title.level) {
-    // Higher level heading becomes title, current title becomes subtitle
-    group.headings.subtitle = group.headings.title;
-    group.headings.title = heading;
-    group.metadata.level = heading.level;
-  } else if (heading.level > group.headings.title.level) {
-    // Lower level heading might be subtitle or eyebrow
-    if (group.content.length === 0 && !group.headings.subtitle) {
-      // No content yet, could be eyebrow pattern
-      group.headings.eyebrow = group.headings.title;
-      group.headings.title = heading;
-      group.metadata.level = heading.level;
-    } else {
-      // Regular subtitle
-      group.headings.subtitle = heading;
-    }
+  // If we have a title but no subtitle, and this heading is lower level
+  if (!group.headings.subtitle && heading.level > group.headings.title.level) {
+    group.headings.subtitle = heading;
+    return "subtitle";
   }
+
+  // Otherwise add to content
+  group.content.push(heading);
+  return "content";
 }
 
-/**
- * Add a completed group to the overall structure
- * @param {object} group - Content group
- * @param {object} structure - Overall content structure
- */
 function addGroupToStructure(group, structure) {
-  // Update group metadata
-  group.metadata.hasMedia = group.content.some((el) => el.type === "image");
-  group.content.forEach((el) => group.metadata.contentTypes.add(el.type));
+  // Update metadata
   group.metadata.contentTypes = Array.from(group.metadata.contentTypes);
 
   // Determine if this is the main group
-  if (!structure.main && isMainGroup(group)) {
+  if (!structure.main && (isMainGroup(group) || structure.items.length === 0)) {
     structure.main = group;
   } else {
     structure.items.push(group);
   }
 }
 
-/**
- * Determine if a group should be considered the main group
- * @param {object} group - Content group
- * @returns {boolean}
- */
 function isMainGroup(group) {
-  // Main group criteria:
-  // 1. First group with a level 1 heading, or
-  // 2. First group with significant content and a clear title
   return (
-    (group.headings.title && group.headings.title.level === 1) ||
-    (group.headings.title && group.content.length > 0)
+    group.headings.title?.level === 1 || // Has H1
+    group.headings.eyebrow?.level === 3 // Has H3 eyebrow
   );
 }

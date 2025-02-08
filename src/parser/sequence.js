@@ -13,7 +13,7 @@ export function processSequence(ast) {
 
   // Process each node in the AST
   visit(ast, (node) => {
-    const element = processNode(node, position++);
+    const element = processNode(node, position++, sequence);
     if (element) {
       sequence.push(element);
     }
@@ -26,9 +26,10 @@ export function processSequence(ast) {
  * Process a single AST node into a content element
  * @param {object} node - AST node
  * @param {number} position - Position in sequence
+ * @param {Array} sequence - Current sequence being built
  * @returns {object|null} Processed content element or null if node should be skipped
  */
-function processNode(node, position) {
+function processNode(node, position, sequence) {
   switch (node.type) {
     case "heading": {
       const labels = extractLabels(node);
@@ -52,7 +53,7 @@ function processNode(node, position) {
         node.children?.length === 1 && node.children[0].type === "image";
 
       if (hasOnlyImage) {
-        return processImageNode(node.children[0], position);
+        return processImageNode(node.children[0], position, sequence);
       }
 
       return {
@@ -63,7 +64,7 @@ function processNode(node, position) {
     }
 
     case "image":
-      return processImageNode(node, position);
+      return processImageNode(node, position, sequence);
 
     case "thematicBreak":
       return {
@@ -96,9 +97,10 @@ function processNode(node, position) {
  * Process an image node with special handling for roles
  * @param {object} node - Image node
  * @param {number} position - Position in sequence
+ * @param {Array} sequence - Current sequence for context
  * @returns {object} Processed image element
  */
-function processImageNode(node, position) {
+function processImageNode(node, position, sequence) {
   // Determine image role from alt text or context
   const alt = node.alt || "";
   let role = "content";
@@ -107,8 +109,13 @@ function processImageNode(node, position) {
   const roleMatch = alt.match(/^(background|icon|gallery):\s*(.*)/);
   if (roleMatch) {
     role = roleMatch[1];
-  } else if (position === 0) {
-    // First image in sequence is typically a background
+  } else if (
+    // Image is first element
+    position === 0 ||
+    // Or it appears before any heading and not after content
+    (!sequence.slice(0, position).some((el) => el.type === "heading") &&
+      !sequence.slice(0, position).some((el) => el.type === "paragraph"))
+  ) {
     role = "background";
   }
 
