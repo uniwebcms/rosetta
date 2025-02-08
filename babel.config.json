@@ -1,0 +1,19 @@
+{
+    "presets": [
+      [
+        "@babel/preset-env",
+        {
+          "targets": {
+            "node": "14"
+          },
+          "modules": false
+        }
+      ]
+    ],
+    "plugins": [],
+    "ignore": [
+      "**/*.test.js",
+      "**/tests/**",
+      "**/node_modules/**"
+    ]
+  }
