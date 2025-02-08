@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals";
 import path from "path";
 import { fileURLToPath } from "url";
 import { parseSection } from "../src/index.js";
