@@ -35,22 +35,24 @@ Content creators already know how to organize documents effectively:
 We leverage these natural organizational patterns instead of inventing new ones. For example:
 
 ```markdown
-### SOLUTIONS # Eyebrow text - naturally smaller and above
+### SOLUTIONS <!--Eyebrow text - naturally smaller and above-->
 
-# Our Platform # Main heading - naturally prominent
+# Our Platform <!--Main heading - naturally prominent-->
 
-Main description... # Main content - naturally follows heading
+Main description... Main content - naturally follows heading
 
-## Feature One # Subheading - naturally starts a new section
+## Feature One <!--Subheading - naturally starts a new section-->
 
-Feature details... # Section content - naturally belongs to heading
+Feature details... <!--Section content - naturally belongs to heading-->
 
-## Feature Two # Another section - same pattern
+## Feature Two <!--Another section - same pattern-->
 
-More details... # More content - same relationship
+More details... <!--More content - same relationship-->
 ```
 
 This structure is intuitive because it follows document organization patterns that content creators already understand from word processors, books, and academic writing.
+
+> NOTE: Here we are using `<!-- -->` for comments.
 
 ### Smart Content Interpretation
 
@@ -85,6 +87,7 @@ Instead of requiring explicit markup for every content relationship, we interpre
    Image placement carries meaning - before a heading suggests background usage, after suggests content imagery.
 
 3. **Semantic Patterns**
+
    ```markdown
    ### CATEGORY
 
@@ -92,6 +95,7 @@ Instead of requiring explicit markup for every content relationship, we interpre
 
    ## Subtitle
    ```
+
    This three-heading pattern is commonly used for sophisticated headings with eyebrow text - we recognize and expose this pattern to components.
 
 ## Component-First Design
@@ -122,14 +126,14 @@ props:
 
 This keeps content files focused on intentions and meaning rather than implementation details.
 
-## Parser Output Structure
+## Semantic Parser Output Structure
 
 The parser provides multiple ways to access the same content, each serving different component needs:
 
 ```javascript
 {
   // For components that need complete control
-  raw: markdownAST,
+  raw: tipTapContent,
 
   // For content-driven components (articles, blog posts)
   sequence: [
