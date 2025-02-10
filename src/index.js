@@ -4,6 +4,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const yaml = require("js-yaml");
 const pLimit = require("p-limit");
+const matter = require("gray-matter");
 const { markdownToProseMirror } = require("@uniwebcms/content-reader");
 
 /**
@@ -126,9 +127,14 @@ async function processPage(pageDir) {
     fileInfos.map(async (fileInfo) => {
       const fileContent = await fs.readFile(fileInfo.filePath, "utf-8");
       let content;
+      let frontMatter = {};
+
       if (fileInfo.ext === "md") {
         try {
-          content = markdownToProseMirror(fileContent);
+          // Use gray-matter to extract front matter and markdown content.
+          const parsed = matter(fileContent);
+          frontMatter = parsed.data || {};
+          content = markdownToProseMirror(parsed.content);
         } catch (err) {
           throw new Error(
             `Error processing Markdown in ${fileInfo.filePath}: ${err.message}`
@@ -136,18 +142,33 @@ async function processPage(pageDir) {
         }
       } else if (fileInfo.ext === "json") {
         try {
-          content = JSON.parse(fileContent);
+          const parsedJson = JSON.parse(fileContent);
+          // If the JSON structure has separate frontMatter and content properties, extract them.
+          if (
+            parsedJson &&
+            typeof parsedJson === "object" &&
+            parsedJson.hasOwnProperty("frontMatter") &&
+            parsedJson.hasOwnProperty("content")
+          ) {
+            frontMatter = parsedJson.frontMatter;
+            content = parsedJson.content;
+          } else {
+            // Otherwise, treat the entire JSON as the content.
+            content = parsedJson;
+          }
         } catch (err) {
           throw new Error(
             `Error parsing JSON in ${fileInfo.filePath}: ${err.message}`
           );
         }
       }
+
       return {
         id: fileInfo.prefix, // Use the numeric prefix as an identifier.
         title: fileInfo.title, // Derived from the filename.
-        content, // Processed content.
-        prefix: fileInfo.prefix, // Keep this for building the hierarchy.
+        frontMatter, // Front matter extracted from the file.
+        content, // Processed content (ProseMirror/TipTap JSON).
+        prefix: fileInfo.prefix, // Retained for building the hierarchy.
       };
     })
   );
